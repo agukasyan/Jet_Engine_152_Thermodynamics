@@ -1,0 +1,9 @@
+Groep 152
+Data 
+           Fuel :       CH4
+       Tamb [K] :    250.00
+   P3overP2 [-] :      7.00
+      Pamb [Pa] :  55000.00
+ mfurate [kg/s] :      0.68
+         AF [-] :    102.78
+       v1 [m/s] :    200.00
