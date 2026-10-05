@@ -17,7 +17,7 @@ kJ=1e3;kmol=1e3;dm=0.1;bara=1e5;kPa = 1000;kN=1000;kg=1;s=1;
 %% Given conditions. 
 %  For the final assignment take the ones from the specific case you are supposed to do.                  
 v1=200;Tamb=250;P3overP2=7;Pamb=55*kPa;mfurate=0.68*kg/s;AF=102.78;             % These are the ones from the book
-cFuel='CH4  - Methane';                                                           % Pick Gasoline as the fuel (other choices check Sp.Name)
+cFuel='CH4';                                                           % Pick Gasoline as the fuel (other choices check Sp.Name)
 %% Select species for the case at hand
 iSp = myfind({Sp.Name},{cFuel,'O2','CO2','H2O','N2'});                      % Find indexes of these species
 SpS=Sp(iSp);                                                                % Subselection of the database in the order according to {'Gasoline','O2','CO2','H2O','N2'}
