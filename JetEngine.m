@@ -41,3 +41,71 @@ RgAir = mixRg(Yair, Mi);
 mair = AF * mfurate;
 mtot = mair + mfurate;
 
+
+%% Diffuser [1-2]
+% Ideal adiabatic diffuser; negligible outlet velocity.
+
+T1 = Tamb;
+P1 = Pamb;
+v2 = 0;
+
+NSp = length(SpS);
+Rg = RgAir;                  % Air gas constant [J/(kg*K)]
+
+% Inlet enthalpy
+for i = 1:NSp
+    hi(i) = HNasa(T1, SpS(i));
+end
+
+h1 = Yair * hi';             % Air enthalpy at state 1 [J/kg]
+
+% Energy conservation
+h2 = h1 + 0.5*v1^2 - 0.5*v2^2;
+
+% Find T2 using bisection
+TL = T1;                    % Lower temperature bound [K]
+TH = 1000;                  % Upper temperature bound [K]
+iter = 0;
+
+while abs(TH - TL) > 0.01
+    iter = iter + 1;
+    Ti = (TL + TH)/2;
+
+    % Air enthalpy at the trial temperature.
+    for i = 1:NSp
+        hi2(i) = HNasa(Ti, SpS(i));
+    end
+
+    h2i = Yair * hi2';
+
+    if h2i > h2
+        TH = Ti;            % Trial temperature is too high
+    else
+        TL = Ti;            % Trial temperature is too low
+    end
+end
+
+T2 = (TH + TL)/2;
+
+% Properties at the inlet and outlet
+for i = 1:NSp
+    hi2(i) = HNasa(T2, SpS(i));
+    si1(i) = SNasa(T1, SpS(i));
+    si2(i) = SNasa(T2, SpS(i));
+end
+
+h2check = Yair * hi2';       % Evaluated enthalpy at the found T2
+s1thermal = Yair * si1';
+s2thermal = Yair * si2';
+
+% Outlet pressure from the isentropic condition
+lnPr = (s2thermal - s1thermal)/Rg;
+P2 = P1 * exp(lnPr);
+
+% Check the entropy change at fixed air composition
+S1 = s1thermal - Rg*log(P1/Pref);
+S2 = s2thermal - Rg*log(P2/Pref);
+
+% Display diffuser results
+fprintf('Diffuser: T2 = %.2f K, P2 = %.2f kPa\n', T2, P2/1000);
+fprintf('Enthalpy residual = %.6f J/kg\n', h2check - h2);
