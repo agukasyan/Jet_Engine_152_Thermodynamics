@@ -154,3 +154,94 @@ Wc = mair * wc;             % Compressor power input [W]
 fprintf('Compressor: T3 = %.2f K, P3 = %.2f kPa\n', ...
     T3, P3/1000);
 fprintf('Compressor power = %.3f MW\n', Wc/1e6);
+
+%% Combustor [3-4]: composition
+% Complete combustion with excess oxygen
+% Species order: fuel, O2, CO2, H2O, N2
+
+% Fuel element composition [O H C N Ar]
+fuelElements = SpS(1).Elcomp;
+zO = fuelElements(1);
+yH = fuelElements(2);
+xC = fuelElements(3);
+
+% [mol O2/mol fuel]
+nuO2 = xC + yH/4 - zO/2;
+
+% Reaction coefficients
+nu = [-1, -nuO2, xC, yH/2, 0];
+
+% Combined air and fuel mass fractions before combustion
+Y3 = (mair * Yair + mfurate * Yfuel) / mtot;
+
+% Convert mass flow rates to molar flow rates [mol/s]
+n3 = mtot * Y3 ./ Mi;
+
+% Complete combustion of the incoming fuel [mol/s]
+n4 = n3 + nu * n3(1);
+
+if any(n4 < -1e-12)
+    error('Not enough oxygen for complete combustion.');
+end
+
+n4(n4 < 0) = 0;              % Remove tiny negative round-off values
+
+% Product mass fractions
+Y4 = n4 .* Mi / sum(n4 .* Mi);
+
+% Mass conservation residual [kg/s]
+massError = sum(n4 .* Mi) - mtot;
+
+% Gas constants before and after combustion [J/(kg*K)]
+Rg3 = mixRg(Y3, Mi);
+Rg4 = mixRg(Y4, Mi);
+
+% Stoichiometric air-fuel ratio and equivalence ratio
+AFstoich = nuO2 * MAir / (Xair(2) * Mi(1));
+phi = AFstoich / AF;
+
+
+%% Combustor [3-4]: energy balance
+% Adiabatic, no shaft work, negligible kinetic energy
+% No pressure loss; fuel inlet temperature = T3
+
+P4 = P3;
+v4 = 0;
+Tfuel = T3;
+
+% Incoming enthalpy flow [W]
+hfuel = mixH(Tfuel, Yfuel, SpS);
+H3in = mair * h3 + mfurate * hfuel;
+
+% Required specific enthalpy of products [J/kg]
+% NASA enthalpies include formation enthalpy
+h4 = H3in / mtot;
+
+% Find T4 using bisection
+TL = T3;
+TH = 3000;
+
+if mixH(TL, Y4, SpS) > h4 || ...
+        mixH(TH, Y4, SpS) < h4
+    error('Combustor temperature is outside the search interval.');
+end
+
+while (TH - TL) > 0.01
+    Ti = (TL + TH)/2;
+    h4trial = mixH(Ti, Y4, SpS);
+
+    if h4trial > h4
+        TH = Ti;
+    else
+        TL = Ti;
+    end
+end
+
+T4 = (TL + TH)/2;
+
+% Energy conservation residual [W]
+energyError = mtot * mixH(T4, Y4, SpS) - H3in;
+
+% Display сombustor results
+fprintf('Combustor: T4 = %.2f K, P4 = %.2f kPa, phi = %.4f\n', ...
+    T4, P4/1000, phi);
