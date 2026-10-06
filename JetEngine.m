@@ -109,3 +109,48 @@ S2 = s2thermal - Rg*log(P2/Pref);
 % Display diffuser results
 fprintf('Diffuser: T2 = %.2f K, P2 = %.2f kPa\n', T2, P2/1000);
 fprintf('Enthalpy residual = %.6f J/kg\n', h2check - h2);
+
+
+%% Compressor [2-3]
+% Ideal adiabatic compressor; negligible inlet and outlet velocities
+
+v3 = 0;
+
+% Outlet pressure [Pa].
+P3 = P3overP2 * P2;
+
+% Target temperature entrophy [J/(kg*K)]
+s3target = mixS(T2, Yair, SpS) + RgAir * log(P3/P2);
+
+TL = T2;                    % Lower temperature bound [K]
+TH = 3000;                  % Upper temperature bound [K]
+
+% Sanity check
+if mixS(TL, Yair, SpS) > s3target || ...
+        mixS(TH, Yair, SpS) < s3target
+    error('Compressor temperature is outside the search interval.');
+end
+
+while (TH - TL) > 0.01
+    Ti = (TL + TH)/2;
+
+    % Temperature part of air entropy at the trial temperature
+    s3trial = mixS(Ti, Yair, SpS);
+
+    if s3trial > s3target
+        TH = Ti;            % Trial temperature is too high
+    else
+        TL = Ti;            % Trial temperature is too low
+    end
+end
+
+T3 = (TL + TH)/2;
+
+h3 = mixH(T3, Yair, SpS);    % Outlet enthalpy [J/kg]
+wc = h3 - h2;               % Specific work input [J/kg air]
+Wc = mair * wc;             % Compressor power input [W]
+
+% Display сompressor results
+fprintf('Compressor: T3 = %.2f K, P3 = %.2f kPa\n', ...
+    T3, P3/1000);
+fprintf('Compressor power = %.3f MW\n', Wc/1e6);
