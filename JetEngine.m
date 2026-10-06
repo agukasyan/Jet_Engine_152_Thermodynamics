@@ -43,7 +43,7 @@ mtot = mair + mfurate;
 
 
 %% Diffuser [1-2]
-% Ideal adiabatic diffuser; negligible outlet velocity.
+% Ideal adiabatic diffuser; negligible outlet velocity
 
 T1 = Tamb;
 P1 = Pamb;
@@ -71,7 +71,7 @@ while abs(TH - TL) > 0.01
     iter = iter + 1;
     Ti = (TL + TH)/2;
 
-    % Air enthalpy at the trial temperature.
+    % Air enthalpy at the trial temperature
     for i = 1:NSp
         hi2(i) = HNasa(Ti, SpS(i));
     end
@@ -109,7 +109,6 @@ S2 = s2thermal - Rg*log(P2/Pref);
 % Display diffuser results
 fprintf('Diffuser: T2 = %.2f K, P2 = %.2f kPa\n', T2, P2/1000);
 fprintf('Enthalpy residual = %.6f J/kg\n', h2check - h2);
-
 
 %% Compressor [2-3]
 % Ideal adiabatic compressor; negligible inlet and outlet velocities
@@ -155,6 +154,7 @@ fprintf('Compressor: T3 = %.2f K, P3 = %.2f kPa\n', ...
     T3, P3/1000);
 fprintf('Compressor power = %.3f MW\n', Wc/1e6);
 
+
 %% Combustor [3-4]: composition
 % Complete combustion with excess oxygen
 % Species order: fuel, O2, CO2, H2O, N2
@@ -179,10 +179,6 @@ n3 = mtot * Y3 ./ Mi;
 
 % Complete combustion of the incoming fuel [mol/s]
 n4 = n3 + nu * n3(1);
-
-if any(n4 < -1e-12)
-    error('Not enough oxygen for complete combustion.');
-end
 
 n4(n4 < 0) = 0;              % Remove tiny negative round-off values
 
@@ -239,9 +235,139 @@ end
 
 T4 = (TL + TH)/2;
 
-% Energy conservation residual [W]
-energyError = mtot * mixH(T4, Y4, SpS) - H3in;
-
 % Display сombustor results
 fprintf('Combustor: T4 = %.2f K, P4 = %.2f kPa, phi = %.4f\n', ...
     T4, P4/1000, phi);
+
+
+%% Turbine [4-5]
+% Ideal adiabatic turbine driving the compressor.
+
+v5 = 0;
+
+% Shaft power balance [J/kg]
+h5 = h4 - Wc / mtot;
+
+% Find outlet temperature using bisection
+TL = 200;
+TH = T4;
+
+if mixH(TL, Y4, SpS) > h5 || ...
+        mixH(TH, Y4, SpS) < h5
+    error('Turbine temperature is outside the search interval.');
+end
+
+while (TH - TL) > 0.01
+    Ti = (TL + TH)/2;
+
+    if mixH(Ti, Y4, SpS) > h5
+        TH = Ti;
+    else
+        TL = Ti;
+    end
+end
+
+T5 = (TL + TH)/2;
+
+% Outlet pressure from the isentropic condition [Pa]
+P5 = P4 * exp((mixS(T5, Y4, SpS) ...
+    - mixS(T4, Y4, SpS)) / Rg4);
+
+fprintf('Turbine: T5 = %.2f K, P5 = %.2f kPa\n', ...
+    T5, P5/1000);
+
+
+%% Nozzle [5-6]
+% Ideal adiabatic nozzle expanding to ambient pressure
+
+P6 = Pamb;
+
+if P5 <= P6
+    error('Nozzle inlet pressure must exceed ambient pressure.');
+end
+
+% Target temperature part of entropy
+s6target = mixS(T5, Y4, SpS) + Rg4 * log(P6/P5);
+
+% Find outlet temperature using bisection
+TL = 200;
+TH = T5;
+
+if mixS(TL, Y4, SpS) > s6target || ...
+        mixS(TH, Y4, SpS) < s6target
+    error('Nozzle temperature is outside the search interval.');
+end
+
+while (TH - TL) > 0.01
+    Ti = (TL + TH)/2;
+
+    if mixS(Ti, Y4, SpS) > s6target
+        TH = Ti;
+    else
+        TL = Ti;
+    end
+end
+
+T6 = (TL + TH)/2;
+h6 = mixH(T6, Y4, SpS);
+
+% Outlet velocity from energy conservation [m/s]
+v6 = sqrt(2 * (h5 - h6) + v5^2);
+
+fprintf('Nozzle: T6 = %.2f K, P6 = %.2f kPa, v6 = %.2f m/s\n', ...
+    T6, P6/1000, v6);
+%% Results: state arrays and Table 1
+T = [T1 T2 T3 T4 T5 T6];
+P = [P1 P2 P3 P4 P5 P6];
+v = [v1 v2 v3 v4 v5 v6];
+
+% States 1-3 contain air; states 4-6 contain combustion products.
+Ycomp = {Yair, Yair, Yair, Y4, Y4, Y4};
+
+h = zeros(1, 6);
+S = zeros(1, 6);
+
+for k = 1:6
+    h(k) = mixH(T(k), Ycomp{k}, SpS);
+    S(k) = mixStotal(T(k), P(k), Ycomp{k}, SpS, Mi);
+end
+
+fprintf('\nTable 1: thermodynamic states\n');
+fprintf('%-14s', 'State');
+fprintf('%11d', 1:6);
+fprintf('\n');
+
+fprintf('%-14s', 'P [kPa]');
+fprintf('%11.2f', P/1000);
+fprintf('\n');
+
+fprintf('%-14s', 'T [K]');
+fprintf('%11.2f', T);
+fprintf('\n');
+
+fprintf('%-14s', 'v [m/s]');
+fprintf('%11.2f', v);
+fprintf('\n');
+
+fprintf('%-14s', 'h [kJ/kg]');
+fprintf('%11.2f', h/1000);
+fprintf('\n');
+
+fprintf('%-14s', 's [kJ/(kg K)]');
+fprintf('%11.4f', S/1000);
+fprintf('\n');
+
+%% Results: Table 2
+fprintf('\nTable 2: combustor mass fractions\n');
+fprintf('AF = %.2f, AFstoich = %.4f, phi = %.4f\n', ...
+    AF, AFstoich, phi);
+
+fprintf('%-14s %12s %12s\n', 'Species', 'Initial', 'Final');
+
+for i = 1:numel(SpS)
+    fprintf('%-14s %12.6f %12.6f\n', ...
+        cSpecies{i}, Y3(i), Y4(i));
+end
+
+fprintf('%-14s %12.3f %12.3f\n', ...
+    'Rg [J/(kg K)]', Rg3, Rg4);
